@@ -7,6 +7,8 @@
 #define MAX_LINE 80 /* The maximum length of a command */
 
 int main(void) {
+    char command[MAX_LINE] = "";
+    char prev_command[MAX_LINE] = "";
     char * args[MAX_LINE / 2 + 1]; /* command line arguments */
     bool background = false;
     int should_run = 1; /* flag to determine when to exit program */
@@ -14,10 +16,20 @@ int main(void) {
         printf("osh>");
         fflush(stdout);
 
-        char command[MAX_LINE];
         fgets(command, MAX_LINE, stdin);
 
-        if (strcmp(command, "!!\n") != 0) {
+        /* history */
+        if (strcmp(command, "!!\n") == 0) {
+            if (prev_command[0] == '\0') {
+                printf("No commands in history\n");
+            }
+            strcpy(command, prev_command);
+        } else if (strcmp(command, "") != 0 && strcmp(command, "\n") != 0) {
+            strcpy(prev_command, command);
+        }
+
+        /* parsing a new command */
+        {
             char * tok = strtok(command, " \n");
             char ** arg = args;
             while (tok != NULL) {
