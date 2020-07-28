@@ -119,7 +119,7 @@ int main(void) {
                     return 1;
                 }
             } else if (output_to_file)  {
-                int fd = open(out_file, O_CREAT | O_WRONLY, 0666);
+                int fd = open(out_file, O_CREAT | O_WRONLY | O_TRUNC, 0666);
                 if (fd < 0) {
                     printf("Error opening '%s'. Errno: %d, message: %s\n", out_file, errno, strerror(errno));
                     fflush(stdout);
