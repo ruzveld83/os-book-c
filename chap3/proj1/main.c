@@ -8,17 +8,21 @@
 
 #define MAX_LINE 80 /* The maximum length of a command */
 #define MAX_ARGS MAX_LINE / 2 + 1
+#define READ_END 0
+#define WRITE_END 1
 
 int main(void) {
     char command[MAX_LINE] = "";
     char prev_command[MAX_LINE] = "";
     char * args[MAX_ARGS]; /* command line arguments */
+    char * args_pipe[MAX_ARGS]; /* command line arguments after pipe */
     bool background = false;
     bool invalid_command = true;
     char out_file[MAX_LINE] = "";
     char in_file[MAX_LINE] = "";
     bool input_from_file = false;
     bool output_to_file = false;
+    bool has_pipe = false;
     int should_run = 1; /* flag to determine when to exit program */
     while (should_run) {
         printf("osh>");
@@ -47,6 +51,7 @@ int main(void) {
             out_file[0] = '\0';
             input_from_file = false;
             output_to_file = false;
+            has_pipe = false;
 
             char * tok = strtok(command, " \n");
             char prev_tok[MAX_LINE] = "";
@@ -74,15 +79,33 @@ int main(void) {
                     input_from_file = true;
                 } else if (strcmp(tok, ">") == 0) {
                     output_to_file = true;
+                } else if (strcmp(tok, "|") == 0) {
+                    if (has_pipe) {
+                        printf("Multiple pipes is unsupported\n");
+                        invalid_command = true;
+                        break;
+                    }
+                    has_pipe = true;
+                    args[arg_index] = NULL;
+                    arg_index = 0;
                 } else if (!output_to_file && !input_from_file) {
-                    args[arg_index] = tok;
+                    if (!has_pipe) {
+                        args[arg_index] = tok;
+                    } else {
+                        args_pipe[arg_index] = tok;
+                    }
                     ++arg_index;
                 }
 
                 strcpy(prev_tok, tok);
                 tok = strtok(NULL, " \n");
             }
-            args[arg_index] = NULL;
+            if (!has_pipe) {
+                args[arg_index] = NULL;
+                args_pipe[0] = NULL;
+            } else {
+                args_pipe[arg_index] = NULL;
+            }
         }
 
         if (input_from_file && in_file[0] == '\0') {
@@ -91,10 +114,19 @@ int main(void) {
         } else if (output_to_file && out_file[0] == '\0') {
             printf("No output file specified\n");
             invalid_command = true;
+        } else if (has_pipe && (input_from_file || output_to_file)) {
+            printf("Piping and redirecting input/output at the same time is unsupported\n");
+            invalid_command = true;
+        } else if (has_pipe && args_pipe[0] == NULL) {
+            printf("Nowhere to pipe to\n");
+            invalid_command = true;
         }
 
 //        for (int i = 0; args[i] != NULL && i < MAX_ARGS; ++i) {
 //            printf("args[%d]: %s\n", i, args[i]);
+//        }
+//        for (int i = 0; args_pipe[i] != NULL && i < MAX_ARGS; ++i) {
+//            printf("args_pipe[%d]: %s\n", i, args_pipe[i]);
 //        }
 
         if (args[0] == NULL || invalid_command) {
@@ -105,8 +137,7 @@ int main(void) {
         if (pid == -1) {
             printf("Error forking\n");
             continue;
-        } else if (pid == 0) {
-            printf("%d %d\n", input_from_file, output_to_file);
+        } else if (pid == 0 && !has_pipe) {
             if (input_from_file) {
                 int fd = open(in_file, O_RDONLY);
                 if (fd < 0) {
@@ -138,6 +169,36 @@ int main(void) {
             printf("Error in exec. Errno: %d, message: %s\n", errno, strerror(errno));
             fflush(stdout);
             return 1;
+        } else if (pid == 0 && has_pipe) {
+            int pipe_fds[2];
+            if (pipe(pipe_fds) < 0) {
+                printf("Error in pipe\n");
+                fflush(stdout);
+                return 1;
+            }
+            printf("Read fd: %d, write fd: %d\n", pipe_fds[READ_END], pipe_fds[WRITE_END]);
+            pid_t inner_pid = fork();
+            if (inner_pid == -1) {
+                printf("Error forking\n");
+                fflush(stdout);
+                return 1;
+            }
+            if (inner_pid == 0) {
+                close(pipe_fds[READ_END]);
+                dup2(pipe_fds[WRITE_END], STDOUT_FILENO);
+                execvp(args[0], args);
+                printf("Error in exec. Errno: %d, message: %s\n", errno, strerror(errno));
+                fflush(stdout);
+                return 1;
+            } else {
+                close(pipe_fds[WRITE_END]);
+                dup2(pipe_fds[READ_END], STDIN_FILENO);
+                waitpid(inner_pid, NULL, 0);
+                execvp(args_pipe[0], args_pipe);
+                printf("Error in inner exec. Errno: %d, message: %s\n", errno, strerror(errno));
+                fflush(stdout);
+                return 1;
+            }
         } else if (!background) {
             waitpid(pid, NULL, 0);
         }
