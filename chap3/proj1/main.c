@@ -17,7 +17,7 @@ int main(void) {
         char command[MAX_LINE];
         fgets(command, MAX_LINE, stdin);
 
-        {
+        if (strcmp(command, "!!\n") != 0) {
             char * tok = strtok(command, " \n");
             char ** arg = args;
             while (tok != NULL) {
@@ -32,11 +32,6 @@ int main(void) {
                 *arg = NULL;
             }
         }
-
-//        for (char ** arg = args; *arg != NULL; ++arg) {
-//            printf("%s\n", *arg);
-//        }
-//        fflush(stdout);
 
         if (args[0] == NULL) {
             continue;
