@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 
-int n_samples = 100000000;
+int n_samples = 1000000000;
 int n_hit = 0;
 
 void * runner(void * param) {
@@ -27,7 +27,7 @@ int main() {
     pthread_join(tid, NULL);
 
     double pi_appr = 4.0 * n_hit / n_samples;
-    printf("Pi approximation is %.6f", pi_appr);
+    printf("Pi approximation is %.6f\n", pi_appr);
 
     return 0;
 }
